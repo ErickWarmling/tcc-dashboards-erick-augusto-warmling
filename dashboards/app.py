@@ -81,7 +81,7 @@ st.markdown(
 # ==== Menu lateral (páginas) ====
 pg = st.navigation([
     st.Page("pages/visao_geral.py", title="Visão Geral", icon="📊", default=True),
-    st.Page("pages/perfil_pacientes.py", title="Perfil dos Pacientes", icon="👥"),
+    st.Page("pages/perfil_casos.py", title="Perfil dos Casos", icon="👥"),
     st.Page("pages/diagnosticos.py", title="Diagnósticos", icon="🩺"),
     st.Page("pages/distribuicao_geografica.py", title="Distribuição Geográfica", icon="🗺️"),
     st.Page("pages/estabelecimentos.py", title="Estabelecimentos", icon="🏥"),
