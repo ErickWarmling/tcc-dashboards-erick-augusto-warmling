@@ -1,4 +1,6 @@
 import streamlit as st
+from db import carregar_dados, nome_mes
+
 
 st.set_page_config(page_title="Dashboards de Dados Oncológicos - SUS/SC", layout="wide")
 
@@ -84,9 +86,91 @@ pg = st.navigation([
     st.Page("pages/perfil_casos.py", title="Perfil dos Casos", icon="👥"),
     st.Page("pages/diagnosticos.py", title="Diagnósticos", icon="🩺"),
     st.Page("pages/distribuicao_geografica.py", title="Distribuição Geográfica", icon="🗺️"),
-    st.Page("pages/estabelecimentos.py", title="Estabelecimentos", icon="🏥"),
-    st.Page("pages/distribuicao_temporal.py", title="Distribuição Temporal", icon="📅"),
 ])
+
+# ==== Filtros (menu lateral, abaixo das abas) ====
+meses_disponiveis = sorted(carregar_dados()["ANO_MES_DIAGNOSTICO"].unique())
+
+
+# Valores iniciais dos filtros (usados ao abrir o dashboard e no botão "Limpar filtros")
+FILTROS_INICIAIS = {
+    "filtro_inicio": meses_disponiveis[0],
+    "filtro_fim": meses_disponiveis[-1],
+    "filtro_sexo": "Todos",
+    "filtro_faixa_etaria": [],
+    "filtro_municipio": [],
+}
+
+for chave, valor in FILTROS_INICIAIS.items():
+    if chave not in st.session_state:
+        st.session_state[chave] = list(valor) if isinstance(valor, list) else valor
+
+
+def limpar_filtros():
+    """Volta todos os filtros do menu lateral ao estado inicial."""
+    for chave, valor in FILTROS_INICIAIS.items():
+        st.session_state[chave] = list(valor) if isinstance(valor, list) else valor
+
+
+with st.sidebar:
+    st.header("Filtros")
+
+    st.markdown("**Período do diagnóstico**")
+    col_de, col_ate = st.columns(2)
+
+    # Os valores iniciais vêm de FILTROS_INICIAIS (por isso não há index/default nos campos)
+    inicio = col_de.selectbox(
+        "De",
+        options=meses_disponiveis,
+        format_func=nome_mes,
+        key="filtro_inicio",
+    )
+    fim = col_ate.selectbox(
+        "Até",
+        options=meses_disponiveis,
+        format_func=nome_mes,
+        key="filtro_fim",
+    )
+
+    # Se o início vier depois do fim, inverte os dois
+    if inicio > fim:
+        inicio, fim = fim, inicio
+
+    # Guarda o período para a dados_filtrados() (db.py)
+    st.session_state["filtro_periodo"] = (inicio, fim)
+
+    # ---- Sexo ----
+    st.segmented_control(
+        "Sexo",
+        options=["Todos", "Feminino", "Masculino"],
+        key="filtro_sexo",
+    )
+
+    # ---- Faixa etária ----
+    st.multiselect(
+        "Faixa etária",
+        options=list(carregar_dados()["FAIXA_ETARIA"].cat.categories),
+        placeholder="Todas",
+        key="filtro_faixa_etaria",
+    )
+
+    # ---- Município de residência (código -> nome, em ordem alfabética) ----
+    dados_completos = carregar_dados()
+    nomes_residencia = (
+        dados_completos.dropna(subset=["MUNICIPIO_RESIDENCIA_NOME"])
+        .drop_duplicates("MUNICIPIO_RESIDENCIA")
+        .set_index("MUNICIPIO_RESIDENCIA")["MUNICIPIO_RESIDENCIA_NOME"]
+        .sort_values()
+    )
+    st.multiselect(
+        "Município de residência",
+        options=nomes_residencia.index.tolist(),
+        format_func=lambda codigo: nomes_residencia[codigo],
+        placeholder="Todos",
+        key="filtro_municipio",
+    )
+
+    st.button("Limpar filtros", on_click=limpar_filtros, width="stretch")
 
 # ==== Navbar ====
 ICONE_CALENDARIO = """
@@ -106,7 +190,7 @@ st.markdown(
     <div class="navbar">
         <span class="navbar-titulo">Dashboard de Dados Oncológicos – SUS/SC</span>
         <div class="navbar-direita">
-            <span class="navbar-item">{ICONE_CALENDARIO} Período: jan/2024 a abr/2026</span>
+            <span class="navbar-item">{ICONE_CALENDARIO} Período: {nome_mes(inicio)} a {nome_mes(fim)}</span>
             <span class="navbar-info" title="Fonte: Painel-Oncologia (DATASUS). Casos diagnosticados e tratados em SC.">{ICONE_INFO}</span>
         </div>
     </div>

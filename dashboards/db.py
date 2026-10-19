@@ -76,3 +76,48 @@ def carregar_dados() -> pd.DataFrame:
 def carregar_mapa() -> dict:
     with open(PASTA_AUXILIARES / "mapa_sc.json", encoding="utf-8") as arquivo:
         return json.load(arquivo)
+
+# ==== Mês por extenso (ex: 2024-01 -> jan/2024) ====
+MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def nome_mes(ano_mes: str) -> str:
+    return f"{MESES[int(ano_mes[5:7]) - 1]}/{ano_mes[:4]}"
+
+
+# ==== Dados com os filtros do menu lateral aplicados ====
+def dados_filtrados(
+    ignorar_sexo: bool = False, ignorar_faixa: bool = False, ignorar_municipio: bool = False
+) -> pd.DataFrame:
+    df = carregar_dados()
+
+    # Período do diagnóstico (ex: 2024-01 a 2025-02)
+    periodo = st.session_state.get("filtro_periodo")
+    if periodo:
+        inicio, fim = periodo
+        df = df[df["ANO_MES_DIAGNOSTICO"].between(inicio, fim)]
+
+    # Sexo ("Todos" ou nenhum botão marcado = sem filtro)
+    sexo = st.session_state.get("filtro_sexo")
+    if sexo and sexo != "Todos" and not ignorar_sexo:
+        df = df[df["SEXO_NOME"] == sexo]
+
+    # Faixa etária (nenhuma escolhida = todas)
+    faixas_etarias = st.session_state.get("filtro_faixa_etaria")
+    if faixas_etarias and not ignorar_faixa:
+        df = df[df["FAIXA_ETARIA"].isin(faixas_etarias)]
+
+    # Município de residência (nenhum escolhido = todos)
+    municipios_residencia = st.session_state.get("filtro_municipio")
+    if municipios_residencia and not ignorar_municipio:
+        df = df[df["MUNICIPIO_RESIDENCIA"].isin(municipios_residencia)]
+
+    # Sem casos com os filtros escolhidos: avisa e para a página
+    if df.empty:
+        st.info(
+            "**Nenhum caso encontrado para os filtros selecionados.** "
+            "Remova algum filtro ou use o botão **Limpar filtros** no menu lateral."
+        )
+        st.stop()
+
+    return df.copy()
