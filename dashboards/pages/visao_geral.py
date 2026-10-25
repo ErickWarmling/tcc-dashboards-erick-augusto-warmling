@@ -5,8 +5,8 @@ import pandas as pd
 from db import PASTA_AUXILIARES, carregar_mapa, dados_filtrados
 
 # ==== Título ====
-st.title("📊 Visão Geral")
-st.caption("Casos oncológicos diagnosticados e tratados em Santa Catarina (jan/2024 a abr/2026)")
+st.title("Visão Geral")
+st.caption("Panorama dos casos oncológicos diagnosticados e tratados em Santa Catarina.")
 
 df = dados_filtrados()
 
@@ -17,21 +17,33 @@ AVISO_MUNICIPIO = "Não é afetado pelo filtro de município de residência."
 # ==== Cálculo dos cards ====
 total_casos = len(df)
 perc_malignas = (df["CATEGORIA_DIAGNOSTICO"] == "01").mean() * 100
-qtd_municipios = df_todos_municipios["MUNICIPIO_RESIDENCIA"].nunique()
 qtd_hospitais = df["ESTABELECIMENTO_TRATAMENTO"].nunique()
+
+# Município de residência com mais casos (só municípios de SC, que têm nome na tabela)
+casos_por_municipio = df_todos_municipios["MUNICIPIO_RESIDENCIA_NOME"].value_counts()
+municipio_lider = casos_por_municipio.index[0]
+casos_lider = casos_por_municipio.iloc[0]
+perc_lider = f"{casos_lider / len(df_todos_municipios) * 100:.1f}%".replace(".", ",")
+texto_casos_lider = "1 caso" if casos_lider == 1 else f"{casos_lider:,} casos".replace(",", ".")
+ajuda_municipio_lider = AVISO_MUNICIPIO
 
 # ==== Cards ====
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total de casos", f"{total_casos:,}".replace(",", "."), border=True)
+col1.metric(":material/clinical_notes: Total de casos", f"{total_casos:,}".replace(",", "."), border=True)
 col2.metric(
-    "Neoplasias malignas (Lei nº 12.732/12)",
+    ":material/oncology: Neoplasias malignas (Lei nº 12.732/12)",
     f"{perc_malignas:.1f}%".replace(".", ","),
     border=True,
     help="CIDs C00 a C97, exceto C44 (pele) e C73 (tireoide), que não são abrangidos pela lei.",
 )
-col3.metric("Municípios de residência", qtd_municipios, border=True, help=AVISO_MUNICIPIO)
-col4.metric("Estabelecimentos de tratamento", qtd_hospitais, border=True)
+col3.metric(
+    ":material/location_city: Município com mais casos",
+    municipio_lider,
+    border=True,
+    help=ajuda_municipio_lider,
+)
+col4.metric(":material/local_hospital: Estabelecimentos de tratamento", qtd_hospitais, border=True)
 
 # ==== Linha 1 de gráficos ====
 graf_esq, graf_dir = st.columns([2, 1])
@@ -76,6 +88,7 @@ with graf_esq.container(border=True):
 # ==== Categoria do diagnóstico ====
 with graf_dir.container(border=True):
     st.subheader("Categoria do diagnóstico")
+    st.caption("Proporção dos casos em cada categoria de diagnóstico do Painel-Oncologia, conforme a Lei nº 12.732/12.")
 
     casos_categoria = (
         df.groupby("CATEGORIA_NOME")
@@ -181,8 +194,8 @@ with graf2_dir.container(border=True):
         label_visibility="collapsed",
         key="qtd_top_municipios",
     )
-    titulo.subheader(f"{qtd} municípios com mais casos")
-    st.caption(AVISO_MUNICIPIO)
+    titulo.subheader(f"{qtd} municípios com mais casos", help=AVISO_MUNICIPIO)
+    st.caption("Municípios de residência dos pacientes com mais casos e o percentual de cada um sobre o total.")
 
     top_municipios = (
         df_todos_municipios.groupby("MUNICIPIO_RESIDENCIA_NOME")
@@ -225,8 +238,7 @@ with graf2_dir.container(border=True):
 
 # ==== Mapa de casos por município ====
 with st.container(border=True):
-    st.subheader("Casos por município de residência")
-    st.caption(AVISO_MUNICIPIO)
+    st.subheader("Casos por município de residência", help=AVISO_MUNICIPIO)
 
     # Lista com todos os 295 municípios de SC
     todos_municipios = pd.read_csv(PASTA_AUXILIARES / "municipios_sc.csv", dtype=str).rename(

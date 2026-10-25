@@ -4,8 +4,8 @@ import streamlit as st
 from db import dados_filtrados
 
 # ==== Título ====
-st.title("👥 Perfil dos Casos")
-st.caption("Idade e sexo dos casos oncológicos diagnosticados e tratados em Santa Catarina (jan/2024 a abr/2024)")
+st.title("Perfil dos Casos")
+st.caption("Idade e sexo dos pacientes e os cânceres mais frequentes em cada grupo.")
 
 df = dados_filtrados()
 
@@ -26,18 +26,18 @@ faixa_predominante = df_todas_faixas["FAIXA_ETARIA"].value_counts().idxmax()
 # ==== Cards ====
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Idade média", f"{idade_media:.1f} anos".replace(".", ","), border=True)
-col2.metric("Masculino", f"{perc_masculino:.1f}%".replace(".", ","), border=True, help=AVISO_SEXO)
-col3.metric("Feminino", f"{perc_feminino:.1f}%".replace(".", ","), border=True, help=AVISO_SEXO)
-col4.metric("Faixa etária predominante", f"{faixa_predominante} anos", border=True, help=AVISO_FAIXA)
+col1.metric(":material/cake: Idade média", f"{idade_media:.1f} anos".replace(".", ","), border=True)
+col2.metric(":material/male: Masculino", f"{perc_masculino:.1f}%".replace(".", ","), border=True, help=AVISO_SEXO)
+col3.metric(":material/female: Feminino", f"{perc_feminino:.1f}%".replace(".", ","), border=True, help=AVISO_SEXO)
+col4.metric(":material/family_restroom: Faixa etária predominante", f"{faixa_predominante} anos", border=True, help=AVISO_FAIXA)
 
 # ==== Linha 1 de gráficos ====
 graf_esq, graf_dir = st.columns(2)
 
 # ==== Pirâmide etária ====
 with graf_esq.container(border=True):
-    st.subheader("Pirâmide etária")
-    st.caption(AVISO_SEXO_FAIXA)
+    st.subheader("Pirâmide etária", help=AVISO_SEXO_FAIXA)
+    st.caption("Casos em cada faixa etária, com o sexo masculino à esquerda e o feminino à direita.")
 
     piramide = (
         df_sem_sexo_faixa.groupby(["FAIXA_ETARIA", "SEXO_NOME"], observed=False)
@@ -50,13 +50,16 @@ with graf_esq.container(border=True):
         piramide["SEXO_NOME"] == "Feminino", -piramide["CASOS"]
     )
 
+    # Percentual de cada barra sobre o total de casos da pirâmide
+    piramide["PERCENTUAL"] = piramide["CASOS"] / piramide["CASOS"].sum() * 100
+
     fig = px.bar(
         piramide,
         x="CASOS_GRAFICO",
         y="FAIXA_ETARIA",
         color="SEXO_NOME",
         orientation="h",
-        custom_data=["CASOS"],
+        custom_data=["CASOS", "PERCENTUAL"],
         color_discrete_map={"Masculino": "#1B59B7", "Feminino": "#E26D9A"},
         labels={"CASOS_GRAFICO": "Casos", "FAIXA_ETARIA": "Faixa etária", "SEXO_NOME": ""},
     )
@@ -70,7 +73,12 @@ with graf_esq.container(border=True):
         range=[-maximo * 1.1, maximo * 1.1],
     )
     fig.update_traces(
-        hovertemplate="<b>%{fullData.name}</b><br>Faixa: %{y}<br>Casos: %{customdata[0]}<extra></extra>"
+        hovertemplate=(
+            "<b>%{fullData.name} · %{y} anos</b><br>"
+            "Casos: %{customdata[0]:,}<br>"
+            "Percentual: %{customdata[1]:.1f}% do total"
+            "<extra></extra>"
+        ),
     )
     fig.update_layout(
         barmode="relative",
@@ -78,13 +86,14 @@ with graf_esq.container(border=True):
         height=450,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         margin=dict(t=30, b=10, l=10, r=10),
+        separators=",.",
+        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 # ==== Distribuição dos casos por sexo ====
 with graf_dir.container(border=True):
-    st.subheader("Distribuição dos casos por sexo")
-    st.caption(AVISO_SEXO)
+    st.subheader("Distribuição dos casos por sexo", help=AVISO_SEXO)
 
     casos_sexo = (
         df_ambos_sexos.groupby("SEXO_NOME")
@@ -107,16 +116,28 @@ with graf_dir.container(border=True):
         y="CASOS",
         color="SEXO_NOME",
         text="TEXTO",
+        custom_data=["PERCENTUAL"],
         color_discrete_map={"Masculino": "#1B59B7", "Feminino": "#E26D9A"},
         labels={"SEXO_NOME": "", "CASOS": "Casos"},
     )
-    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Casos: %{y:,}<br>"
+            "Percentual: %{customdata[0]:.1f}% do total"
+            "<extra></extra>"
+        ),
+    )
     fig.update_yaxes(range=[0, casos_sexo["CASOS"].max() * 1.15])
     fig.update_layout(
         showlegend=False,
-        bargap=0.5,
+        bargap=0.65,
         height=450,
         margin=dict(t=30, b=10, l=10, r=10),
+        separators=",.",
+        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -125,14 +146,28 @@ graf2_esq, graf2_dir = st.columns(2)
 
 # ==== Distribuição da idade ====
 with graf2_esq.container(border=True):
-    st.subheader("Distribuição da idade")
-    st.caption(AVISO_FAIXA)
+    st.subheader("Distribuição da idade", help=AVISO_FAIXA)
+    st.caption("Quantidade de casos por idade no diagnóstico. A linha tracejada marca a idade média.")
 
-    fig = px.histogram(
-        df_todas_faixas,
+    # Casos em cada idade (uma barra por ano de idade)
+    casos_idade = df_todas_faixas.groupby("IDADE_PACIENTE").size().reset_index(name="CASOS")
+    casos_idade["PERCENTUAL"] = casos_idade["CASOS"] / casos_idade["CASOS"].sum() * 100
+
+    fig = px.bar(
+        casos_idade,
         x="IDADE_PACIENTE",
+        y="CASOS",
+        custom_data=["PERCENTUAL"],
         color_discrete_sequence=["#1B59B7"],
-        labels={"IDADE_PACIENTE": "Idade no diagnóstico (anos)"},
+        labels={"IDADE_PACIENTE": "Idade no diagnóstico (anos)", "CASOS": "Casos"},
+    )
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{x} anos</b><br>"
+            "Casos: %{y:,}<br>"
+            "Percentual: %{customdata[0]:.1f}% do total"
+            "<extra></extra>"
+        ),
     )
 
     # Linha tracejada na idade média (das mesmas idades mostradas no histograma)
@@ -150,13 +185,15 @@ with graf2_esq.container(border=True):
         bargap=0.05,
         height=450,
         margin=dict(t=30, b=10, l=10, r=10),
+        separators=",.",
+        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 # ==== Faixa etária × categoria do diagnóstico ====
 with graf2_dir.container(border=True):
-    st.subheader("Faixa etária × categoria do diagnóstico")
-    st.caption(AVISO_FAIXA)
+    st.subheader("Faixa etária × categoria do diagnóstico", help=AVISO_FAIXA)
+    st.caption("Em cada faixa etária, a proporção dos casos em cada categoria de diagnóstico. Cada coluna soma 100%.")
 
     faixa_categoria = (
         df_todas_faixas.groupby(["FAIXA_ETARIA", "CATEGORIA_NOME"], observed=False)
@@ -183,7 +220,13 @@ with graf2_dir.container(border=True):
         labels={"FAIXA_ETARIA": "Faixa etária", "PERCENTUAL": "% dos casos", "CATEGORIA_NOME": ""},
     )
     fig.update_traces(
-        hovertemplate="<b>%{fullData.name}</b><br>Faixa: %{x}<br>%{y:.1f}% (%{customdata[0]} casos)<extra></extra>"
+        hovertemplate=(
+            "<b>%{fullData.name}</b><br>"
+            "Faixa etária: %{x} anos<br>"
+            "Casos: %{customdata[0]:,}<br>"
+            "Percentual: %{y:.1f}% dos casos da faixa"
+            "<extra></extra>"
+        ),
     )
     fig.update_yaxes(range=[0, 100], ticksuffix="%")
     fig.update_layout(
@@ -192,12 +235,14 @@ with graf2_dir.container(border=True):
         height=450,
         legend=dict(orientation="v", yanchor="top", y=-0.2, xanchor="center", x=0.5),
         margin=dict(t=30, b=10, l=10, r=10),
+        separators=",.",
+        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
 # ==== Principais tipos de câncer por sexo ====
-def grafico_principais_canceres(dados, cor):
+def grafico_principais_canceres(dados, cor, sexo):
     """Barras deitadas com os 10 cânceres mais frequentes."""
     top_cids = (
         dados.groupby(["DIAGNOSTICO_DETALHADO", "CID_NOME"])
@@ -209,36 +254,54 @@ def grafico_principais_canceres(dados, cor):
     top_cids["CANCER"] = top_cids["DIAGNOSTICO_DETALHADO"] + " - " + top_cids["CID_NOME"]
     top_cids["CANCER"] = top_cids["CANCER"].apply(lambda nome: "<br>".join(textwrap.wrap(nome, 30)))
 
+    # Percentual sobre todos os casos do sexo
+    top_cids["PERC"] = top_cids["CASOS"] / len(dados) * 100
+
     fig = px.bar(
         top_cids,
         x="CASOS",
         y="CANCER",
         orientation="h",
-        text="CASOS",
+        custom_data=["PERC"],
         color_discrete_sequence=[cor],
         labels={"CASOS": "Casos", "CANCER": ""},
     )
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(range=[0, top_cids["CASOS"].max() * 1.15])
-    fig.update_layout(height=550, bargap=0.4, margin=dict(t=10, b=10, l=10, r=10))
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+        texttemplate="%{x:,} (%{customdata[0]:.1f}%)",
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Casos: %{x:,}<br>"
+            "Percentual: %{customdata[0]:.1f}% dos casos do sexo " + sexo +
+            "<extra></extra>"
+        ),
+    )
+    fig.update_xaxes(range=[0, top_cids["CASOS"].max() * 1.35])
+    fig.update_layout(
+        height=550,
+        bargap=0.4,
+        margin=dict(t=10, b=10, l=10, r=10),
+        separators=",.",
+        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
+    )
     return fig
 
 
 with st.container(border=True):
-    st.subheader("Principais tipos de câncer por sexo")
-    st.caption(AVISO_SEXO)
+    st.subheader("Principais tipos de câncer por sexo", help=AVISO_SEXO)
 
     col_masc, col_fem = st.columns(2)
 
     with col_masc:
         st.markdown("**Masculino**")
         casos_masc = df_ambos_sexos[df_ambos_sexos["SEXO_PACIENTE"] == "M"]
-        st.plotly_chart(grafico_principais_canceres(casos_masc, "#1B59B7"), use_container_width=True)
+        st.plotly_chart(grafico_principais_canceres(casos_masc, "#1B59B7", "masculino"), use_container_width=True)
 
     with col_fem:
         st.markdown("**Feminino**")
         casos_fem = df_ambos_sexos[df_ambos_sexos["SEXO_PACIENTE"] == "F"]
-        st.plotly_chart(grafico_principais_canceres(casos_fem, "#E26D9A"), use_container_width=True)
+        st.plotly_chart(grafico_principais_canceres(casos_fem, "#E26D9A", "feminino"), use_container_width=True)
 
 
 # ==== Idade × tipo de câncer ====
@@ -251,7 +314,7 @@ with st.container(border=True):
         label_visibility="collapsed",
         key="categoria_idade_cancer",
     )
-    titulo.subheader("Idade × tipo de câncer")
+    titulo.subheader("Idade × tipo de câncer", help=AVISO_FAIXA)
 
     # Filtra a categoria escolhida
     dados_categoria = (
@@ -266,8 +329,7 @@ with st.container(border=True):
 
     st.caption(
         f"Percentual dos casos de cada câncer em cada faixa etária, nos {len(top10_cids)} tipos mais frequentes "
-        f"({categoria.lower() if categoria == 'Todas as categorias' else categoria}). Cada linha soma 100%. "
-        + AVISO_FAIXA
+        f"({categoria.lower() if categoria == 'Todas as categorias' else categoria}). Cada linha soma 100%."
     )
 
     idades_cancer["CANCER"] = idades_cancer["DIAGNOSTICO_DETALHADO"] + " - " + idades_cancer["CID_NOME"]
@@ -299,8 +361,9 @@ with st.container(border=True):
         texttemplate="%{z:.1f}%",
         hovertemplate=(
             "<b>%{y}</b><br>"
-            "Faixa: %{x} anos<br>"
-            "%{z:.1f}% dos casos (%{customdata:,} casos)"
+            "Faixa etária: %{x} anos<br>"
+            "Casos: %{customdata:,}<br>"
+            "Percentual: %{z:.1f}% dos casos deste câncer"
             "<extra></extra>"
         ),
     )

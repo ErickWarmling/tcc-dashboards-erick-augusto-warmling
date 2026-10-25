@@ -6,8 +6,8 @@ import streamlit as st
 from db import PASTA_AUXILIARES, carregar_mapa, dados_filtrados
 
 # ==== Título ====
-st.title("🗺️ Distribuição Geográfica")
-st.caption("Onde os pacientes moram, são diagnosticados e tratados em Santa Catarina (jan/2024 a abr/2026)")
+st.title("Distribuição Geográfica")
+st.caption("Onde os pacientes moram, onde são tratados e quanto se deslocam até o tratamento.")
 
 df = dados_filtrados()
 
@@ -36,25 +36,25 @@ perc_polo = casos_por_polo.max() / len(df) * 100
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
-    "Tratados fora do município de residência",
+    ":material/directions_car: Tratados fora do município de residência",
     f"{perc_tratado_fora:.1f}%".replace(".", ","),
     border=True,
     help="Casos em que o primeiro tratamento foi feito em um município diferente daquele onde o paciente mora.",
 )
 col2.metric(
-    "Diagnosticados fora do município de residência",
+    ":material/alt_route: Diagnosticados fora do município de residência",
     f"{perc_diagnosticado_fora:.1f}%".replace(".", ","),
     border=True,
     help="Casos em que o diagnóstico foi feito em um município diferente daquele onde o paciente mora.",
 )
 col3.metric(
-    "Municípios que realizam tratamento",
+    ":material/map: Municípios que realizam tratamento",
     f"{qtd_municipios_trat} de {total_municipios}",
     border=True,
     help="Municípios de SC com pelo menos um estabelecimento que registrou tratamento oncológico.",
 )
 col4.metric(
-    "Principal polo de tratamento",
+    ":material/hub: Principal polo de tratamento",
     polo_nome,
     border=True,
     help=f"Município que mais realizou tratamentos: {perc_polo:.1f}% do total.".replace(".", ",", 1),
@@ -156,8 +156,8 @@ with st.container(border=True):
     )
     titulo.subheader(f"{qtd_trajetos} trajetos mais frequentes até o tratamento")
     st.caption(
-        "Município de residência → município do tratamento, com a distância em linha reta entre eles. "
-        "Considera só os casos tratados fora do município de residência."
+        "Município de residência (esquerda) → município do tratamento (direita). A espessura de cada faixa "
+        "é a quantidade de casos. Considera só os casos tratados fora do município de residência."
     )
 
     # Casos e distância de cada par residência → tratamento
@@ -167,7 +167,6 @@ with st.container(border=True):
         .agg(CASOS=("DISTANCIA_KM", "size"), KM=("DISTANCIA_KM", "first"))
         .reset_index()
         .nlargest(qtd_trajetos, "CASOS")
-        .sort_values("CASOS")
     )
 
     # Sem nenhum caso tratado fora do município (ex: todos trataram na própria cidade)
@@ -176,39 +175,47 @@ with st.container(border=True):
     else:
         trajetos["ORIGEM"] = trajetos["MUNICIPIO_RESIDENCIA"].map(nomes_municipios)
         trajetos["DESTINO"] = trajetos["MUNICIPIO_TRATAMENTO"].map(nomes_municipios)
-        trajetos["TRAJETO"] = trajetos["ORIGEM"] + " → " + trajetos["DESTINO"]
 
-        # Texto ao lado de cada barra: "1.234 casos · 15 km"
-        trajetos["TEXTO"] = (
-            trajetos["CASOS"].map(lambda n: f"{n:,}".replace(",", "."))
-            + " casos · "
-            + trajetos["KM"].map(lambda km: f"{km:.0f} km")
-        )
+        # Nós: residência (esquerda) e tratamento (direita), do maior para o menor
+        casos_origem = trajetos.groupby("ORIGEM")["CASOS"].sum().sort_values(ascending=False)
+        casos_destino = trajetos.groupby("DESTINO")["CASOS"].sum().sort_values(ascending=False)
+        posicao_origem = {nome: i for i, nome in enumerate(casos_origem.index)}
+        posicao_destino = {nome: i + len(casos_origem) for i, nome in enumerate(casos_destino.index)}
 
-        fig = px.bar(
-            trajetos,
-            x="CASOS",
-            y="TRAJETO",
-            orientation="h",
-            text="TEXTO",
-            custom_data=["ORIGEM", "DESTINO", "KM"],
-            color_discrete_sequence=["#1B59B7"],
-            labels={"CASOS": "Casos", "TRAJETO": ""},
+        # Rótulo de cada nó com os casos (ex: "Palhoça (809)")
+        rotulos = [f"{nome} ({casos:,})".replace(",", ".") for nome, casos in casos_origem.items()] + [
+            f"{nome} ({casos:,})".replace(",", ".") for nome, casos in casos_destino.items()
+        ]
+        cores_nos = ["#1B59B7"] * len(casos_origem) + ["#0B3B7B"] * len(casos_destino)
+
+        fig = go.Figure(
+            go.Sankey(
+                textfont=dict(color="#1F2937", size=13, shadow="none"),
+                node=dict(
+                    label=rotulos,
+                    color=cores_nos,
+                    pad=14,
+                    thickness=16,
+                    hovertemplate="<b>%{label}</b><extra></extra>",
+                ),
+                link=dict(
+                    source=trajetos["ORIGEM"].map(posicao_origem),
+                    target=trajetos["DESTINO"].map(posicao_destino),
+                    value=trajetos["CASOS"],
+                    customdata=trajetos[["ORIGEM", "DESTINO", "KM"]].values,
+                    color="rgba(27, 89, 183, 0.30)",
+                    hovertemplate=(
+                        "<b>%{customdata[0]} → %{customdata[1]}</b><br>"
+                        "Casos: %{value:,}<br>"
+                        "Distância: %{customdata[2]:.0f} km"
+                        "<extra></extra>"
+                    ),
+                ),
+            )
         )
-        fig.update_traces(
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate=(
-                "<b>%{customdata[0]} → %{customdata[1]}</b><br>"
-                "Distância: %{customdata[2]:.0f} km<br>"
-                "Casos: %{x:,}"
-                "<extra></extra>"
-            ),
-        )
-        fig.update_xaxes(range=[0, trajetos["CASOS"].max() * 1.35])
         fig.update_layout(
-            height=max(450, qtd_trajetos * 40),
-            bargap=0.4,
+            height=max(450, len(casos_origem) * 38),
+            font_size=13,
             margin=dict(t=10, b=10, l=10, r=10),
             separators=",.",
             hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
@@ -226,11 +233,11 @@ with st.container(border=True):
         label_visibility="collapsed",
         key="qtd_polos_tratamento",
     )
-    titulo.subheader("Pacientes vindos de outros municípios nos principais polos de tratamento")
+    titulo.subheader("Pacientes vindos de outros municípios nos principais polos de tratamento", help=AVISO_MUNICIPIO)
     st.caption(
         f"Os {qtd_polos} municípios que mais realizam tratamentos. Cada ponto é o percentual dos casos tratados "
         "no município que são de pacientes residentes em outros municípios. "
-        "A linha tracejada é o percentual de todo o estado. " + AVISO_MUNICIPIO
+        "A linha tracejada é o percentual de todo o estado."
     )
 
     # Os municípios que mais tratam
@@ -318,7 +325,7 @@ with st.container(border=True):
         key="polo_abrangencia",
     )
     polo_nome = nomes_municipios.get(polo, polo)
-    titulo.subheader(f"Abrangência de {polo_nome}")
+    titulo.subheader(f"Abrangência de {polo_nome}", help=AVISO_MUNICIPIO)
 
     # Casos tratados no município escolhido e de onde eles vêm
     casos_polo = df_todos_municipios[df_todos_municipios["MUNICIPIO_TRATAMENTO"] == polo]
@@ -338,7 +345,7 @@ with st.container(border=True):
     )
     if casos_outros_estados:
         legenda += f" {casos_outros_estados} casos de moradores de outros estados não aparecem no mapa."
-    st.caption(legenda + " " + AVISO_MUNICIPIO)
+    st.caption(legenda)
 
     # Todos os municípios de SC com a quantidade de casos enviados ao polo (0 se nenhum)
     abrangencia = municipios.rename(columns={"CODIGO": "MUNICIPIO_RESIDENCIA"}).copy()

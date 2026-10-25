@@ -5,8 +5,8 @@ import streamlit as st
 from db import PASTA_AUXILIARES, dados_filtrados
 
 # ==== Título ====
-st.title("🩺 Diagnósticos")
-st.caption("Tipos de câncer, rede de diagnóstico e prazo até o tratamento em Santa Catarina (jan/2024 a abr/2026)")
+st.title("Diagnósticos")
+st.caption("Tipos de câncer diagnosticados, a rede de estabelecimentos que realiza os diagnósticos e o tempo até o início do tratamento.")
 
 df = dados_filtrados()
 
@@ -29,24 +29,24 @@ qtd_estab_diag = df["ESTABELECIMENTO_DIAGNOSTICO"].nunique()
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
-    "Tipos de câncer diagnosticados",
+    ":material/microbiology: Tipos de câncer diagnosticados",
     qtd_cids,
     border=True,
     help="Quantidade de códigos CID-10 diferentes registrados nos diagnósticos.",
 )
 col2.metric(
-    "Municípios com serviço de diagnóstico",
+    ":material/location_on: Municípios com serviço de diagnóstico",
     f"{qtd_municipios_diag} de {total_municipios}",
     border=True,
     help="Municípios de SC com pelo menos um estabelecimento que registrou diagnóstico.",
 )
 col3.metric(
-    "Tratados em até 60 dias",
+    ":material/timer: Tratados em até 60 dias",
     f"{perc_ate_60:.1f}%".replace(".", ","),
     border=True,
     help="Casos de neoplasia maligna (Lei nº 12.732/12) que iniciaram o tratamento em até 60 dias após o diagnóstico.",
 )
-col4.metric("Estabelecimentos de diagnóstico", qtd_estab_diag, border=True)
+col4.metric(":material/lab_research: Estabelecimentos de diagnóstico", qtd_estab_diag, border=True)
 
 # ==== Grupos da CID-10 (região do corpo) ====
 # (letra, número inicial, número final, nome do grupo)
@@ -262,7 +262,10 @@ graf_esq, graf_dir = st.columns(2)
 # ==== Tempo até o tratamento conforme o local ====
 with graf_esq.container(border=True):
     st.subheader("Tempo até o tratamento conforme o local")
-    st.caption("Tempo mediano entre o diagnóstico e o primeiro tratamento, comparando onde cada um foi feito.")
+    st.caption(
+        "Tempo mediano entre o diagnóstico e o primeiro tratamento quando o tratamento é feito no mesmo "
+        "estabelecimento do diagnóstico, em outro estabelecimento do mesmo município ou em outro município."
+    )
 
     local = df[df["DIAS_ATE_TRATAMENTO"].notna()].copy()
 
@@ -325,7 +328,10 @@ with graf_dir.container(border=True):
         key="qtd_top_estab_diag",
     )
     titulo.subheader(f"{qtd_estab} estabelecimentos que mais diagnosticam")
-    st.caption("Estabelecimentos identificados pelo nome cadastrado no CNES.")
+    st.caption(
+        "Estabelecimentos, pelo nome cadastrado no CNES, que registraram mais diagnósticos "
+        "e o percentual de cada um sobre o total."
+    )
 
     top_estab = (
         df.groupby(["ESTABELECIMENTO_DIAGNOSTICO", "MUNICIPIO_DIAGNOSTICO"])
@@ -380,7 +386,7 @@ with graf_dir.container(border=True):
             "<extra></extra>"
         ),
     )
-    fig.update_xaxes(range=[0, top_estab["CASOS"].max() * 1.3])
+    fig.update_xaxes(range=[0, top_estab["CASOS"].max() * 1.45])
     fig.update_layout(
         height=max(450, qtd_estab * 50),
         bargap=0.4,
