@@ -14,7 +14,7 @@ PASTA_AUXILIARES = Path(__file__).parent / "data" / "auxiliares"
 
 
 # ==== Conexão com o banco ====
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_engine():
     return create_engine(
         f"postgresql+psycopg://{os.environ['DB_USER']}:{os.environ['DB_PASSWORD']}"
@@ -22,7 +22,7 @@ def get_engine():
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def consultar(sql: str) -> pd.DataFrame:
     return pd.read_sql(sql, get_engine())
 
@@ -37,9 +37,12 @@ CATEGORIAS = {
 
 SEXOS = {"F": "Feminino", "M": "Masculino"}
 
+# Opção do filtro de município para quem mora fora de SC e foi atendido aqui
+OUTROS_ESTADOS = "Outros estados"
+
 
 # ==== Dados prontos para os dashboards ====
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def carregar_dados() -> pd.DataFrame:
     df = consultar("SELECT * FROM dados_oncologia_sus")
 
@@ -70,9 +73,14 @@ def carregar_dados() -> pd.DataFrame:
     ).rename(columns={"CODIGO": "MUNICIPIO_RESIDENCIA", "NOME_MUNICIPIO": "MUNICIPIO_RESIDENCIA_NOME"})
     df = df.merge(municipios, on="MUNICIPIO_RESIDENCIA", how="left")
 
+    # ---- Valor usado no filtro de município (sem nome = não é município de SC) ----
+    df["MUNICIPIO_FILTRO"] = df["MUNICIPIO_RESIDENCIA"].where(
+        df["MUNICIPIO_RESIDENCIA_NOME"].notna(), OUTROS_ESTADOS
+    )
+
     return df
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def carregar_mapa() -> dict:
     with open(PASTA_AUXILIARES / "mapa_sc.json", encoding="utf-8") as arquivo:
         return json.load(arquivo)
@@ -110,7 +118,7 @@ def dados_filtrados(
     # Município de residência (nenhum escolhido = todos)
     municipios_residencia = st.session_state.get("filtro_municipio")
     if municipios_residencia and not ignorar_municipio:
-        df = df[df["MUNICIPIO_RESIDENCIA"].isin(municipios_residencia)]
+        df = df[df["MUNICIPIO_FILTRO"].isin(municipios_residencia)]
 
     # Sem casos com os filtros escolhidos: avisa e para a página
     if df.empty:

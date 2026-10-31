@@ -1,13 +1,11 @@
 import streamlit as st
-from db import carregar_dados, nome_mes
 
 
 st.set_page_config(page_title="Dashboards de Dados Oncológicos - SUS/SC", layout="wide")
 
-# ==== Logo no topo do menu lateral ====
-st.logo("assets/logo_sus.png", size="large")
-
 # ==== Estilos (CSS) ====
+# Vem antes de tudo: o Streamlit mostra o boneco de "Running..." 500 ms após iniciar,
+# e o estilo que o esconde precisa chegar antes disso (o st.logo é lento na 1ª execução)
 st.markdown(
     """
     <style>
@@ -41,6 +39,10 @@ st.markdown(
     }
     /* Esconde o menu padrão do Streamlit (os três pontinhos no canto superior direito) */
     [data-testid="stMainMenu"] {
+        display: none;
+    }
+    /* Esconde o aviso "Running..." do Streamlit: a tela de carregamento faz esse papel */
+    [data-testid="stStatusWidget"] {
         display: none;
     }
 
@@ -178,10 +180,53 @@ st.markdown(
         background-color: #E8EEF9;
         border-radius: 50%;
     }
+
+    /* ---- Tela de carregamento dos dados ---- */
+    /* Só aparece após 0.15s: com os dados já em cache ela some antes disso e não pisca */
+    .carregando {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background-color: #F5F7FB;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        opacity: 0;
+        animation: carregando-aparecer 0.2s ease-out 0.15s forwards;
+    }
+    .carregando-icone {
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 0.75rem;
+        border: 0.3rem solid #E8EEF9;
+        border-top-color: #1B59B7;
+        border-radius: 50%;
+        animation: carregando-girar 0.9s linear infinite;
+    }
+    .carregando-titulo {
+        color: #0B3B7B;
+        font-size: 1.15rem;
+        font-weight: 600;
+    }
+    .carregando-texto {
+        color: #6B7280;
+        font-size: 0.9rem;
+    }
+    @keyframes carregando-aparecer {
+        to { opacity: 1; }
+    }
+    @keyframes carregando-girar {
+        to { transform: rotate(360deg); }
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# ==== Logo no topo do menu lateral ====
+st.logo("assets/logo_sus.png", size="large")
 
 # ==== Menu lateral (páginas) ====
 pg = st.navigation([
@@ -191,6 +236,28 @@ pg = st.navigation([
     st.Page("pages/distribuicao_geografica.py", title="Distribuição Geográfica", icon=":material/map:"),
 ])
 
+# ==== Tela de carregamento (enquanto os dados não estão em cache) ====
+tela_carregamento = st.empty()
+tela_carregamento.markdown(
+    """
+    <div class="carregando" role="status">
+        <div class="carregando-icone"></div>
+        <span class="carregando-titulo">Carregando os dados oncológicos</span>
+        <span class="carregando-texto">Os dados estão sendo carregados, aguarde um instante.</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+try:
+    # Importado aqui porque o db.py é lento para abrir (pandas, sqlalchemy):
+    # assim a tela já aparece enquanto ele carrega
+    from db import OUTROS_ESTADOS, carregar_dados, nome_mes
+
+    carregar_dados()
+finally:
+    # Tira a tela mesmo em caso de erro, para a mensagem do erro ficar visível
+    tela_carregamento.empty()
+
 # ==== Filtros (menu lateral, abaixo das abas) ====
 meses_disponiveis = sorted(carregar_dados()["ANO_MES_DIAGNOSTICO"].unique())
 
@@ -199,6 +266,7 @@ meses_disponiveis = sorted(carregar_dados()["ANO_MES_DIAGNOSTICO"].unique())
 FILTROS_INICIAIS = {
     "filtro_inicio": meses_disponiveis[0],
     "filtro_fim": meses_disponiveis[-1],
+    "filtro_periodo": (meses_disponiveis[0], meses_disponiveis[-1]),
     "filtro_sexo": "Todos",
     "filtro_faixa_etaria": [],
     "filtro_municipio": [],
@@ -215,6 +283,35 @@ def limpar_filtros():
         st.session_state[chave] = list(valor) if isinstance(valor, list) else valor
 
 
+def aplicar_periodo():
+    """Guarda o período escolhido para a dados_filtrados() (db.py)."""
+    st.session_state["filtro_periodo"] = (
+        st.session_state["filtro_inicio"],
+        st.session_state["filtro_fim"],
+    )
+
+
+@st.fragment
+def selecionar_periodo():
+    """Campos De/Até: cada um só oferece meses compatíveis com o outro."""
+    st.markdown("**Período do diagnóstico**")
+    col_de, col_ate = st.columns(2)
+
+    # Os valores iniciais vêm de FILTROS_INICIAIS (por isso não há index/default nos campos)
+    col_de.selectbox(
+        "De",
+        options=[mes for mes in meses_disponiveis if mes <= st.session_state["filtro_fim"]],
+        format_func=nome_mes,
+        key="filtro_inicio",
+    )
+    col_ate.selectbox(
+        "Até",
+        options=[mes for mes in meses_disponiveis if mes >= st.session_state["filtro_inicio"]],
+        format_func=nome_mes,
+        key="filtro_fim",
+    )
+
+
 # Município de residência (código -> nome, em ordem alfabética)
 dados_completos = carregar_dados()
 nomes_residencia = (
@@ -227,25 +324,11 @@ nomes_residencia = (
 with st.sidebar:
     st.header("Filtros")
 
+    # Fora do formulário: dentro dele, um campo não reage ao outro até clicar no botão
+    selecionar_periodo()
+
     # Formulário: as escolhas só são aplicadas ao clicar em "Aplicar filtros"
     with st.form("form_filtros", border=False):
-        st.markdown("**Período do diagnóstico**")
-        col_de, col_ate = st.columns(2)
-
-        # Os valores iniciais vêm de FILTROS_INICIAIS (por isso não há index/default nos campos)
-        inicio = col_de.selectbox(
-            "De",
-            options=meses_disponiveis,
-            format_func=nome_mes,
-            key="filtro_inicio",
-        )
-        fim = col_ate.selectbox(
-            "Até",
-            options=meses_disponiveis,
-            format_func=nome_mes,
-            key="filtro_fim",
-        )
-
         # ---- Sexo ----
         st.segmented_control(
             "Sexo",
@@ -264,28 +347,27 @@ with st.sidebar:
         # ---- Município de residência ----
         st.multiselect(
             "Município de residência",
-            options=nomes_residencia.index.tolist(),
-            format_func=lambda codigo: nomes_residencia[codigo],
+            options=[*nomes_residencia.index, OUTROS_ESTADOS],
+            format_func=lambda codigo: nomes_residencia.get(codigo, codigo),
             placeholder="Todos",
             key="filtro_municipio",
         )
 
         # ---- Botões ----
         st.form_submit_button(
-            "Aplicar filtros", type="primary", icon=":material/filter_alt:", width="stretch"
+            "Aplicar filtros",
+            on_click=aplicar_periodo,
+            type="primary",
+            icon=":material/filter_alt:",
+            width="stretch",
         )
         st.form_submit_button(
             "Limpar filtros", on_click=limpar_filtros, icon=":material/restart_alt:", width="stretch"
         )
 
-# Se o início vier depois do fim, inverte os dois
-if inicio > fim:
-    inicio, fim = fim, inicio
-
-# Guarda o período para a dados_filtrados() (db.py)
-st.session_state["filtro_periodo"] = (inicio, fim)
-
 # ==== Navbar ====
+inicio, fim = st.session_state["filtro_periodo"]
+
 ICONE_CALENDARIO = """
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
   <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>

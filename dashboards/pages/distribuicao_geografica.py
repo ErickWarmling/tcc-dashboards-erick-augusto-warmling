@@ -105,43 +105,47 @@ with st.container(border=True):
         labels=faixas,
     )
 
-    casos_distancia = (
-        com_distancia.groupby("FAIXA_DISTANCIA", observed=False)
-        .size()
-        .reset_index(name="CASOS")
-    )
-    casos_distancia["PERCENTUAL"] = casos_distancia["CASOS"] / casos_distancia["CASOS"].sum() * 100
+    # Sem distância a mostrar (ex: só pacientes de outros estados, fora do mapa de SC)
+    if com_distancia.empty:
+        st.info("Não há distância a mostrar para pacientes de outros estados.")
+    else:
+        casos_distancia = (
+            com_distancia.groupby("FAIXA_DISTANCIA", observed=False)
+            .size()
+            .reset_index(name="CASOS")
+        )
+        casos_distancia["PERCENTUAL"] = casos_distancia["CASOS"] / casos_distancia["CASOS"].sum() * 100
 
-    # Texto em cima de cada barra: "15.230 (51,3%)"
-    casos_distancia["TEXTO"] = (
-        casos_distancia["CASOS"].map(lambda n: f"{n:,}".replace(",", "."))
-        + " ("
-        + casos_distancia["PERCENTUAL"].map(lambda p: f"{p:.1f}%".replace(".", ","))
-        + ")"
-    )
+        # Texto em cima de cada barra: "15.230 (51,3%)"
+        casos_distancia["TEXTO"] = (
+            casos_distancia["CASOS"].map(lambda n: f"{n:,}".replace(",", "."))
+            + " ("
+            + casos_distancia["PERCENTUAL"].map(lambda p: f"{p:.1f}%".replace(".", ","))
+            + ")"
+        )
 
-    fig = px.bar(
-        casos_distancia,
-        x="FAIXA_DISTANCIA",
-        y="CASOS",
-        text="TEXTO",
-        color_discrete_sequence=["#1B59B7"],
-        labels={"FAIXA_DISTANCIA": "", "CASOS": "Casos"},
-    )
-    fig.update_traces(
-        textposition="outside",
-        cliponaxis=False,
-        hovertemplate="<b>%{x}</b><br>%{text}<extra></extra>",
-    )
-    fig.update_yaxes(range=[0, casos_distancia["CASOS"].max() * 1.15])
-    fig.update_layout(
-        bargap=0.4,
-        height=450,
-        margin=dict(t=30, b=10, l=10, r=10),
-        separators=",.",
-        hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            casos_distancia,
+            x="FAIXA_DISTANCIA",
+            y="CASOS",
+            text="TEXTO",
+            color_discrete_sequence=["#1B59B7"],
+            labels={"FAIXA_DISTANCIA": "", "CASOS": "Casos"},
+        )
+        fig.update_traces(
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="<b>%{x}</b><br>%{text}<extra></extra>",
+        )
+        fig.update_yaxes(range=[0, casos_distancia["CASOS"].max() * 1.15])
+        fig.update_layout(
+            bargap=0.4,
+            height=450,
+            margin=dict(t=30, b=10, l=10, r=10),
+            separators=",.",
+            hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 # ==== Trajetos mais frequentes entre a residência e o tratamento ====
 with st.container(border=True):
