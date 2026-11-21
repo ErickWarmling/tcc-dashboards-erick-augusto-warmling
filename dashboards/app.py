@@ -43,6 +43,12 @@ st.markdown(
     [data-testid="stMainMenu"] {
         display: none;
     }
+    /* Esconde os botões que o Streamlit Cloud coloca no topo (compartilhar, GitHub, editar etc.),
+       que ficariam por cima do período mostrado na navbar */
+    [data-testid="stToolbarActions"],
+    [data-testid="stAppDeployButton"] {
+        display: none !important;
+    }
     /* Esconde o aviso "Running..." do Streamlit: a tela de carregamento faz esse papel */
     [data-testid="stStatusWidget"] {
         display: none;
