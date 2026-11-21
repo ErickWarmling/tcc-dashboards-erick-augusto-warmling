@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 
 
@@ -226,7 +228,8 @@ st.markdown(
 )
 
 # ==== Logo no topo do menu lateral ====
-st.logo("assets/logo_sus.png", size="large")
+# Caminho a partir da pasta deste arquivo: funciona mesmo se o app for iniciado de outra pasta
+st.logo(Path(__file__).parent / "assets" / "logo_sus.png", size="large")
 
 # ==== Menu lateral (páginas) ====
 pg = st.navigation([
