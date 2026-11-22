@@ -267,7 +267,7 @@ with st.container(border=True):
         hovertemplate=(
             "<b>%{customdata[0]}</b><br>"
             "Casos: %{z:,}<br>"
-            "Percentual: %{customdata[1]:.1f}% do total"
+            "Percentual: %{customdata[1]:.2f}% do total"
             "<extra></extra>"
         ),
     )
