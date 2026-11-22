@@ -368,9 +368,14 @@ with st.container(border=True):
         ),
     )
     fig.update_xaxes(side="top")
+
+    # Cada linha precisa caber o nome mais longo (nomes quebrados em várias linhas)
+    linhas_nome = max((nome.count("<br>") + 1 for nome in perc_faixa.index), default=1)
+    altura_linha = max(60, linhas_nome * 20)
+
     fig.update_layout(
-        # Altura acompanha a quantidade de cânceres (categorias pequenas ficam mais baixas)
-        height=max(300, len(top10_cids) * 60),
+        # Altura acompanha a quantidade de cânceres e o tamanho dos nomes
+        height=max(300, len(perc_faixa) * altura_linha),
         margin=dict(t=10, b=10, l=10, r=10),
         separators=",.",
         hoverlabel=dict(bgcolor="white", font_color="#262730", font_size=13, align="left"),
